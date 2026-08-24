@@ -222,6 +222,85 @@ rule, and this file is mostly a list of rules that decayed.
 
 ---
 
+## The studio split — choose the variant
+
+**The selector question: is every turn paced by a human, or does the loop
+run autonomously?** Answer it here, by replacing the mark below with one of
+the two words. `tools/verify.py` FAILS until you do — undeclared is not a
+default, because the failure mode of skipping this question is a director
+that exists and is never called, and that failure is invisible from inside
+the session having it.
+
+    {{VARIANT: human-paced | autonomous}}
+
+Capability concentrates at the DIRECTION ROLE, not at the resident session.
+The two coincide only when a human paces the loop.
+
+**Human-paced variant.** The resident session IS the director, on the top
+model, and the tier-2/tier-3 roster ships unchanged. The trigger list below
+still names the moments that ARE direction moments — read it as guidance,
+because here the human is the enforcement and the escalation kit is not
+copied. `director_cadence` passes, printing that it is not enforcing.
+
+**Autonomous variant.** The resident is an **opus coordinator that decides
+nothing binding**: it routes, spawns, reads landings, and keeps the queue.
+The `studio-director` agent is spawned MANDATORILY on these triggers —
+
+1. builder-batch review before any commit of builder work
+2. queue reordering or refill
+3. a landing that changes a conclusion
+4. verifier-vs-builder disagreement
+5. close-outs (the quality-ladder question)
+6. anything touching the premise, the roadmap, or CLAUDE.md
+
+— and mandatorily means mechanically. A judgment-based "escalate when it
+matters" rule asks the cheaper model to know what it does not know, and the
+known failure mode of a coordinator is under-escalation. The extracted
+project's owner set the condition the whole arrangement is judged against
+(2026-08-24): *"we need to be 100% sure it works. no point in having a fable
+director if it's never called upon."*
+
+**The triggers bind regardless of the doorway** — a skill step that performs
+a trigger act (`/close`'s quality-ladder question, `/land`'s routing of a
+finding that changes a conclusion) is a director spawn in the autonomous
+variant, not an exemption from one.
+
+**The coordinator's charter is THIS SECTION — there is no coordinator agent
+file, and you should not create one.** The resident is the main session, not
+a subagent; a charter in an agent file would describe a role nothing spawns.
+
+Three mechanical enforcements, required in the autonomous variant:
+
+- **Every spawn is logged.** `.claude/hooks/agent-log.sh` (SubagentStart)
+  appends `when<TAB>agent<TAB>model` to a tracked `.claude/agent-log.tsv`.
+  Read it with
+  `sed 1d .claude/agent-log.tsv | cut -f2 | sort | uniq -c | sort -rn`.
+  Near-zero director rows over a working week, while commits flow, means
+  the triggers are not firing — that is the observable that reopens this
+  decision, not a feeling that review is thin.
+- **`director_cadence` blocks the commit** when more than **{{100}}**
+  changed lines under the code tree have no `studio-director` row newer
+  than HEAD (`tools/verify.d/director_cadence.py`, run by `verify.py`).
+  **The enforced number lives in ONE place: `MAX_UNREVIEWED_LINES` in
+  that file.** The mark above only mirrors it for the reader — the check
+  never parses prose, so filling the mark alone changes nothing and the
+  gate goes on enforcing the constant. Set the constant, then the mark.
+- **The watchdog's dailies check force-spawns a director review** if none
+  has run in **{{12h}}**. This one cannot ship as portable code — trigger
+  systems differ per environment — so it is wiring you must add. The
+  precedent implementation is the extracted project's hourly watchdog
+  trigger, which re-invokes the loop and carries the current work order in
+  its own prompt.
+
+**Both numbers are inherited from the extracted project and UNVALIDATED —
+print your own series before trusting them** (rule 2: never set a threshold
+you have not measured). `python3 tools/verify.d/director_cadence.py
+--series` prints the changed-line count of every recent commit, newest
+first, then the median and the peak, so the bound comes from your own
+distribution rather than from someone else's.
+
+---
+
 ## The working loop
 
 - **`queue.md` is what you pick up.** Next items are written BEFORE a
