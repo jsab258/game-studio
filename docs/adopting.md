@@ -101,3 +101,19 @@ What adoption adds there, and the whole list:
 What adoption does NOT touch there: CLAUDE.md, every tool, the queue, the
 roadmap, the sim-shots channel, all history. Time cost: under an hour.
 Loss: nothing, by construction.
+
+## Validation record — 2026-08-24
+
+The template was validated the way its own rules demand — instantiated,
+not inspected. A toy project was created from the template and every
+component run against it:
+
+- `tools/verify.py` green on the fresh instantiation, with the queue
+  check exercising its has-a-queue branch (the template repo itself
+  exercises the no-queue branch — both halves have now run).
+- The commit gate, in the real flow rather than the selftest's fixtures:
+  ACCEPTED a commit immediately after green verify, BLOCKED after a
+  post-verify edit (naming the file), ACCEPTED again after re-verify.
+- `session-start.sh` printed branch, uncommitted count, and the queue
+  head on the toy; the hooks selftest covers its bare-repo case.
+- Hooks selftest: 7/7, accepting cases first.
