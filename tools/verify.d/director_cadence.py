@@ -198,6 +198,109 @@ def head_epoch(root):
     return int(out.strip())
 
 
+# How far back to look for a code commit before giving up and falling back to
+# HEAD. Bounded so this cannot walk a decade of history inside a pre-commit
+# check; the fallback is the stricter direction, so the bound costs nothing.
+REF_SCAN_COMMITS = 200
+
+
+def code_reference(root):
+    """The instant a director row must be NEWER than: the last commit that
+    TOUCHED CODE, not HEAD.
+
+    THE BUG THIS FIXES, because it is not obvious from the outside. Comparing
+    against HEAD means any commit that lands after a valid review invalidates
+    it — and the two commonest shapes are exactly the ones that carry no code:
+    a documentation edit, and CI committing its own evidence back into the
+    repository. In the extracted project that fired three times in one night,
+    each time forcing a fresh top-tier spawn to re-certify a batch that had
+    already been reviewed. The review had not gone stale; the reference point
+    was simply the wrong instant.
+
+    Returns a dict: ct (epoch), sha, kind, noncode, scanned, head_ct.
+
+    `kind` is one of:
+      code            — a commit touching a code path was found; ct is its date
+      nocode          — none found in the scanned window; falls back to HEAD
+      nocode-shallow  — same, in a shallow clone where history is truncated
+
+    THE FALLBACK IS THE STRICTER DIRECTION, ON PURPOSE. Falling back to HEAD
+    can only ask for MORE freshness, never less, and it prints which of the
+    three worlds it is in — "reviewed since the last code change", "no code
+    has ever been committed here" and "the history is not present" have
+    different next actions and used to be indistinguishable (rule 3b: a
+    reference point needs its provenance exactly as a zero needs its
+    denominator).
+
+    KNOWN BLIND SPOTS, stated rather than discovered later. A director row
+    newer than the reference proves a spawn happened after the last code
+    commit, not that it reviewed THESE lines. A commit whose date was
+    rewritten backwards by an amend or rebase moves the reference with it,
+    because this is a date comparison and always was. And a MERGE commit
+    lists no paths under `--name-only`, so it is counted as CODE — the
+    stricter reading, since it keeps the reference newer.
+    """
+    head_ct = head_epoch(root)
+    out_r = {"ct": head_ct, "sha": "", "kind": "nocode", "noncode": 0,
+             "scanned": 0, "head_ct": head_ct}
+    if head_ct is None:
+        return out_r
+    rc, out = _git(root, "log", f"-{REF_SCAN_COMMITS}", "--name-only",
+                   "--format=%x01%ct %h")
+    if rc != 0:
+        return out_r
+    cur_ct = cur_sha = None
+    saw_path = False
+    is_code_commit = False
+    scanned = 0
+    order = []          # newest first: (ct, sha, is_code)
+    for row in out.splitlines():
+        if row.startswith("\x01"):
+            if cur_ct is not None:
+                # A commit that listed NO paths (merge, empty) counts as code.
+                order.append((cur_ct, cur_sha, is_code_commit or not saw_path))
+            head, _, sha = row[1:].partition(" ")
+            cur_ct = int(head) if head.isdigit() else None
+            cur_sha, saw_path, is_code_commit = sha.strip(), False, False
+            scanned += 1
+            continue
+        if not row.strip() or cur_ct is None:
+            continue
+        saw_path = True
+        if _is_code(row.strip()):
+            is_code_commit = True
+    if cur_ct is not None:
+        order.append((cur_ct, cur_sha, is_code_commit or not saw_path))
+    out_r["scanned"] = scanned
+    for i, (ct, sha, is_code) in enumerate(order):
+        if is_code:
+            out_r.update(ct=ct, sha=sha, kind="code", noncode=i)
+            return out_r
+    rc2, out2 = _git(root, "rev-parse", "--is-shallow-repository")
+    if rc2 == 0 and out2.strip() == "true":
+        out_r["kind"] = "nocode-shallow"
+    return out_r
+
+
+def _ref_phrase(ref, iso):
+    """WHICH instant freshness was measured against, in words — printed on
+    every branch, green and red, because a freshness verdict with no
+    reference beside it cannot be checked by the person reading it."""
+    if ref["kind"] == "code":
+        p = f"reference = last code commit {ref['sha']} ({iso})"
+        if ref["noncode"]:
+            p += (f", HEAD is +{ref['noncode']} non-code commit(s) later — "
+                  f"a doc or CI commit does not invalidate a review")
+        return p
+    if ref["kind"] == "nocode-shallow":
+        return (f"reference = HEAD ({iso}) — SHALLOW clone, no code commit "
+                f"reachable in {ref['scanned']} examined; falls back to HEAD, "
+                f"which is stricter")
+    return (f"reference = HEAD ({iso}) — no commit among {ref['scanned']} "
+            f"examined touched a code path; falls back to HEAD, which is "
+            f"stricter")
+
+
 def _age(seconds):
     if seconds is None:
         return "never"
@@ -239,20 +342,27 @@ def check(root=ROOT):
                        "not get to report green")
 
     newest, director_rows, total_rows = newest_director_row(root)
-    head = head_epoch(root)
+    # THE REFERENCE IS THE LAST COMMIT THAT TOUCHED CODE, NOT HEAD — see
+    # code_reference(). Comparing against HEAD lets a docs commit, or CI
+    # committing its own evidence, invalidate a review that is still valid.
+    ref = code_reference(root)
     now = int(time.time())
-    fresh = (newest is not None and head is not None and newest > head)
-    head_age = _age(None if head is None else now - head)
+    fresh = (newest is not None and ref["ct"] is not None
+             and newest > ref["ct"])
+    ref_age = _age(None if ref["ct"] is None else now - ref["ct"])
+    ref_iso = ("unknown" if ref["ct"] is None else
+               time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ref["ct"]))
+               + f", {ref_age} old")
     row_age = ("no such row ever" if newest is None
                else f"newest {_age(now - newest)} old")
     census = (f"{director_rows} of {total_rows} log rows are "
-              f"{DIRECTOR_AGENT} ({row_age}), HEAD {head_age} old")
+              f"{DIRECTOR_AGENT} ({row_age}); {_ref_phrase(ref, ref_iso)}")
 
     if lines > MAX_UNREVIEWED_LINES and not fresh:
         return False, (f"director_cadence RED: {lines} changed lines in "
                        f"{_n(code_files, 'code file')} ({seen} paths seen) "
-                       f"with no {DIRECTOR_AGENT} row newer than HEAD — "
-                       f"{census}; "
+                       f"with no {DIRECTOR_AGENT} row newer than the "
+                       f"reference commit — {census}; "
                        f"threshold {MAX_UNREVIEWED_LINES} "
                        f"({THRESHOLD_PROVENANCE}). Spawn the director for the "
                        f"batch review, or run --series and set the threshold "
@@ -321,11 +431,18 @@ def series(root=ROOT, count=50):
 # -------------------------------------------------------------- selftest ---
 
 def _fixture(tmp, variant_line, changed_lines, row_age_hours,
-             director_rows=True, project_name="Toy"):
-    """Build a throwaway repo. HEAD is committed two hours in the past so a
-    'fresh' row (now) and a 'stale' row (5h ago) sit either side of it
-    unambiguously — a fixture whose fresh case is only fresh by a second
-    tests the clock, not the check."""
+             director_rows=True, project_name="Toy", noncode_commit=False):
+    """Build a throwaway repo. The CODE commit is made two hours in the past
+    so a 'fresh' row (1h ago or now) and a 'stale' row (5h ago) sit either
+    side of it unambiguously — a fixture whose fresh case is only fresh by a
+    second tests the clock, not the check.
+
+    With `noncode_commit`, a docs-only commit lands at NOW, i.e. AFTER the
+    fresh row: so HEAD is newer than the review and the code commit is older
+    than it, and the two references give opposite answers. That is the whole
+    point of the case, and it is why this comment no longer says 'HEAD is
+    committed two hours in the past' — it was true until that option was
+    added, and it is the reference commit, not HEAD, that this pins."""
     import os
     tmp.mkdir(parents=True, exist_ok=True)
     (tmp / ".claude").mkdir(exist_ok=True)
@@ -345,6 +462,18 @@ def _fixture(tmp, variant_line, changed_lines, row_age_hours,
                  ["commit", "-q", "-m", "base"]):
         subprocess.run(["git", *args], cwd=str(tmp), env=env,
                        capture_output=True, text=True)
+    # THE SHAPE THAT BROKE IT IN THE WILD, BY CONSTRUCTION: a second commit,
+    # LATER than the fresh director row, touching NO code — a docs edit, or CI
+    # committing its own evidence back. Staged BY NAME, never `-A`, so it
+    # cannot sweep up the pending batch the fixture is about to create.
+    if noncode_commit:
+        env2 = dict(env)
+        env2.pop("GIT_AUTHOR_DATE"); env2.pop("GIT_COMMITTER_DATE")
+        (tmp / "NOTES.md").write_text("CI wrote this\n", encoding="utf-8")
+        for args in (["add", "NOTES.md"],
+                     ["commit", "-q", "-m", "docs: evidence from CI"]):
+            subprocess.run(["git", *args], cwd=str(tmp), env=env2,
+                           capture_output=True, text=True)
     if director_rows is not None:
         rows = "when\tagent\tmodel\n"
         if director_rows:
@@ -411,6 +540,20 @@ def selftest():
             "the un-instantiated template is a legible skip, not a failure",
             msg)
 
+        # THE REGRESSION CASE FOR THE REFERENCE FIX, AND IT IS AN ACCEPTING
+        # ONE — which is why it went unwritten for so long (rule 5b). The
+        # director row is fresh against the last CODE commit and STALE against
+        # HEAD, because a docs/CI commit landed after the review. Comparing
+        # against HEAD blocks this; comparing against the last code commit
+        # accepts it. It fired three times in one night before it was fixed.
+        r = _fixture(base / "j", "VARIANT: autonomous", BIG, 1,
+                     noncode_commit=True)
+        ok, msg = check(r)
+        say(ok, "a review is NOT invalidated by a later non-code commit", msg)
+        say("last code commit" in msg and "+1 non-code commit(s) later" in msg,
+            "the accepting message names the reference and why it is not HEAD",
+            msg)
+
         # --- REJECTING CASES -------------------------------------------
         r = _fixture(base / "e", "VARIANT: autonomous", BIG, 5)
         ok, msg = check(r)
@@ -428,6 +571,16 @@ def selftest():
         ok, msg = check(r)
         say(not ok and f"{BIG} changed lines" in msg,
             "a brand-new untracked DIRECTORY is counted, not skipped", msg)
+
+        # The same non-code-commit shape, but the row predates the CODE
+        # commit too: the fix must not have turned the gate off, only moved
+        # the instant it reads. Without this the accepting case above could be
+        # satisfied by a check that never blocks anything.
+        r = _fixture(base / "k", "VARIANT: autonomous", BIG, 5,
+                     noncode_commit=True)
+        ok, msg = check(r)
+        say(not ok and "last code commit" in msg,
+            "a row older than the CODE commit is still blocked", msg)
 
         r = _fixture(base / "f", "{{VARIANT: human-paced | autonomous}}",
                      BIG, 5)

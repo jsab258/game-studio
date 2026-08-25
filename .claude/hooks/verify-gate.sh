@@ -17,6 +17,18 @@
 # Tested both ways (rule 5b) by .claude/hooks/selftest.sh:
 #   ACCEPT: non-commit commands; commit with fresh footer
 #   REJECT: commit with no footer; commit with footer older than a change
+#
+# KNOWN LIMITATION, UNSOLVED: THIS GATE ASSUMES ONE WRITER. The footer
+# describes the WHOLE tree at the instant verify ran, and the freshness loop
+# below walks every path `git status` reports — so with several agents
+# editing in parallel the tree is rarely stable long enough for any footer to
+# describe it, and the gate blocks on files unrelated to the commit in hand.
+# A whole-tree footer and concurrent writers are in tension by construction.
+# Named here rather than hidden, because a gate that fights concurrency
+# silently gets deleted within a day and then nothing is enforced at all.
+# The two honest directions are in CLAUDE.md ("Project mechanics"):
+# serialize the commit point, or narrow freshness to the paths being
+# committed — which trades a class of false BLOCK for a class of false ALLOW.
 
 FOOTER="${VERIFY_FOOTER:-tools/.verify-footer}"
 

@@ -54,6 +54,16 @@ Tier 3 — Execution (model: opus)
   content-wrangler       asset fetching, attribution, licence discipline, reach ledgers
 ```
 
+Each roster file carries a `maxTurns` ceiling. They are set HIGH on
+purpose, and the reason is counter-intuitive enough to be worth stating
+before you tune them down: a capped agent does not stop early and cheaply —
+it spends its full context, delivers nothing, and then needs a resume that
+reloads that context from scratch. **A low cap turns one agent into two.**
+The extracted project lost seven agents in one night to ceilings roughly
+half these, each stalling one step from finishing. Ceilings are not targets,
+and these are unvalidated upward: the evidence says the old numbers were too
+low, not that these are right.
+
 **Resident session.** In a *human-paced* loop the resident IS the director,
 on the top model. In an *autonomous* loop the resident is an opus
 coordinator and the director is spawned on mandatory triggers. Pick one at

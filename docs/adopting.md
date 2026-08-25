@@ -92,9 +92,15 @@ hooks, path-scoped rules). Nothing is lost because nothing is replaced.
      `python3 tools/verify.d/director_cadence.py --selftest` covers it on
      fixtures, and on an autonomous project run it once for real:
      - ACCEPT: a batch over the threshold **with** a `studio-director` row
-       newer than HEAD in `.claude/agent-log.tsv` — verify stays green.
-       This is the half that goes unrun, and a cadence gate that blocks a
-       reviewed batch will be deleted within a day.
+       newer than the last code commit, in `.claude/agent-log.tsv` — verify
+       stays green. This is the half that goes unrun, and a cadence gate
+       that blocks a reviewed batch will be deleted within a day.
+     - ACCEPT: the same, then land a DOCS-only commit (or let CI commit its
+       own evidence) and re-run — still green. The reference is the last
+       commit that touched code, not HEAD, so a non-code commit must not
+       invalidate a review. Run this one for real; it is the case the
+       fixtures were written last for and the one that fired three times in
+       one night on the project this came from.
      - BLOCK: the same batch with the log stale (or absent) — verify goes
        red and names the changed-line count and the row's age.
    - **The spawn log, both ways:** spawn any agent and confirm one new row
@@ -160,7 +166,24 @@ component run against it:
   head on the toy; the hooks selftest covers its bare-repo case.
 - Hooks selftest: 23/23, accepting cases first (7 commit gate and
   session-start, 15 spawn log, 1 pluggable-check selftest), plus
-  `director_cadence`'s own 11/11 on fixtures.
+  `director_cadence`'s own **14/14** on fixtures. *(This line said "11/11"
+  until 2026-08-25; three cases were added with the last-code-commit
+  reference fix — the count is quoted rather than silently overwritten so
+  the number cannot be re-derived from an old copy of this page.)*
+
+## Maintenance note — 2026-08-25
+
+**The template's own `CLAUDE.md` is now 466 lines**, up 129 in the 25 Aug
+sync that added the batch definition, the turn-ceiling finding, the
+spawn-is-not-a-review hole and three smaller rules. Nothing gates it —
+rule 10's 400-line cap is written for a LIVE *plan*, and no shipped check
+measures this file — so appending was the right move for one pass and is
+not the right move for the next one. **Recorded rather than fixed: the
+sync after this should SPLIT rather than append**, most likely by moving
+the studio-split machinery into its own page and leaving CLAUDE.md the
+rules. Written down because the observation is worth more than the session
+that made it, and this page is where the template's own maintenance
+records already live.
 
 ## Validation record: the escalation kit — 2026-08-24
 

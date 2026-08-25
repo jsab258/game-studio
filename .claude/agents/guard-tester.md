@@ -3,7 +3,7 @@ name: guard-tester
 description: "Tier 2 verifier. Tests guards, gates, validators and lints on BOTH outcomes — especially the accepting case, which is the half that goes unrun. Use before any new guard ships, after any guard is modified, and on a schedule over the guard inventory. May write TEMPORARY fixtures in a scratch area to produce test inputs; may never modify the guard itself or any production file."
 tools: Read, Glob, Grep, Bash, Write
 model: opus
-maxTurns: 20
+maxTurns: 35
 memory: project
 ---
 
@@ -57,6 +57,12 @@ can fix the guard will fix the guard, and then the fix has no reviewer.
 
 - One fixture per case, named for the case, deleted after (register
   cleanup; leaked fixtures have red-walled a disk mid-verify before).
+- **The scratch directory is SHARED with every other agent running, so a
+  fixed filename is a collision, not a convention.** Include your agent name
+  and a unique suffix in every path you write. In the extracted project one
+  commit landed carrying a different commit's message entirely because two
+  concurrent workers each wrote the obvious short name; read back anything
+  you wrote before a delay rather than trusting that it is still yours.
 - Rejecting cases pinned to real assets rot when the project does the work
   the guard exists to prompt — prefer synthetic keys that exist nowhere
   over real names that should someday be used.

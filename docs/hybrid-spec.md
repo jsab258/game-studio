@@ -126,6 +126,19 @@ titled `## The studio split — choose the variant`, containing:
   watchdog's dailies check force-spawns a director review if none in
   {{12h}}. Mark both numbers "inherited from the extracted project,
   unvalidated — print your own series before trusting them" (rule 2).
+
+  > **CORRECTION, 2026-08-25 — the words "no director row newer than HEAD"
+  > above are now FALSE.** They are left standing because this file is the
+  > decision record and rewriting its history would destroy the thing it is
+  > for; they are quoted here so the claim cannot be re-derived as truth by
+  > the next reader, who will find it as plausible as its author did. The
+  > reference is **the last commit that TOUCHED CODE**, not HEAD: comparing
+  > against HEAD let a docs commit — or CI committing its own evidence back
+  > into the repository — invalidate a review that was still valid, which
+  > fired three times in one night and forced a fresh top-tier spawn each
+  > time. The living text is CLAUDE.md "The studio split" and
+  > `tools/verify.d/director_cadence.py`, as this file's own status block
+  > already says.
 - One line of rationale with Jafar's condition quoted: mechanical, not
   discretionary, because "no point in having a fable director if it's
   never called upon."
