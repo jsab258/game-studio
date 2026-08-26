@@ -136,6 +136,29 @@ produced locally, say so in the commit.
 - **Keep a `--constant` sweep**: list every metric that has never been
   anything but zero across all kept runs. A reading cannot go red; only a
   person noticing "this number never moved" catches a dead branch.
+- **A PROBE MUST REPRODUCE THE FAULT BEFORE IT CAN SAY WHAT FIXES IT**, and
+  this is 5b aimed at the other half of the pair. A guard is tested on the
+  case it should PASS; a probe is worthless on a case where the fault does
+  not OCCUR. Named incident: two A/B probes were run to decide whether a
+  prompt change had removed a text artefact from a generated texture. Both
+  came back clean, the change was declared unnecessary, and the full-size
+  image landed hours later carrying the artefact. **Neither probe had ever
+  exhibited it.** "Both clean" reads as *the fix is unnecessary*; the only
+  honest reading is *this probe did not reproduce the fault, so it measured
+  nothing about the fault*. The caveat was even written down — "a probe
+  result may not transfer" — and quoted in the same breath as the conclusion
+  that ignored it. **Before a probe decides anything, ask what it would look
+  like if the fault were present, and confirm the control case shows it.**
+- **A guard that refuses the accepting fixture is WITHDRAWN, not tuned.**
+  Live instance: a screen written to reject clips named after costumed
+  characters was run against the 65 shipped animation clips and refused two —
+  the intended one, and the default idle every character in the game plays
+  while standing still. The names could not distinguish "the motion is a
+  monster's" from "the file was exported off a monster rig". Shipping it
+  would have emptied the most-used asset in the project to fix one nobody had
+  looked at. The replacement screened the axis the fault was actually on and
+  refused exactly one of 65. **Put the fixture it wrongly refused into the
+  accepting table BY NAME**, so the withdrawal cannot be quietly undone.
 
 ## 6. Built is not running
 
@@ -145,6 +168,34 @@ for its call sites before saying it is finished. Keep a **reach ledger** —
 public APIs with no caller, fetched assets no code names, systems with no
 frame that shows them — and treat its entries' *reasons* as decaying
 comments (rule 1).
+
+**THE WIRING IS ASSERTED IN THE TEST, READ OFF THE SOURCE.** A class can be
+complete, careful, and constructed nowhere. Named incident: a 170-line
+publisher — plain-English message for every failure path, incremental
+delivery so a four-hour run that dies at hour three has still delivered —
+was never instantiated. Its only live call site passed `publisher=None`;
+every other call to it was a selftest. It sat dead for eleven days while a
+person carried files by hand, and the report told them it had sent. **A test
+that the class behaves correctly is worth nothing while nothing calls it**,
+so the selftest now parses this file's own source and asserts the live entry
+point constructs it and passes it. Removing the argument turns the test red.
+
+**AND MADE IS NOT DELIVERED.** The same run had a second half of the same
+fault: only items it WROTE were handed to the publisher, so a run where
+everything was already on disk pushed the manifest, the report, and not one
+of the fourteen files it existed to deliver. **The question an output stage
+answers is "is this artefact where it needs to be", never "did this run make
+it."** Assert the COUNT, not that something was offered — one missing name is
+one artefact nobody backs up.
+
+**AND A FIX CANNOT DELIVER ITSELF.** A self-updating script that pulls before
+running cannot fix its own first run: the copy on the machine is the old one,
+without the pull. **The first run after any change to a launcher is always
+the old launcher.** Fingerprint the file across the update, and if it changed,
+re-launch once — guarded so it is strictly once, because a loop there is
+worse than the hole. This also closes a quieter fault: a shell reads a script
+line by line AS IT RUNS, so an update that rewrites it mid-run leaves the
+shell reading from a byte offset into different text.
 
 ## 7. Estimates name what dominates, or are not given
 
@@ -157,6 +208,27 @@ it up. "I don't know" beats a number you will retract.
 Ending a turn does not schedule a wake-up. If you say you will report back,
 start a watcher in the same turn that fires on the condition or a timeout.
 No watcher, no promise.
+
+**AND AN UNATTENDED RUN MUST NEVER BE ABLE TO WAIT FOR A HUMAN.** Every
+script that shells out to a tool which can open an editor or prompt for a
+credential must say so up front, or it hangs in a window nobody is watching
+and looks identical to slow work. Swept once on a real project: **22 scripts
+ran `git`, and not one guarded the editor.** One of them made a merge commit,
+`vim` opened, the window was closed, and the half-finished merge blocked every
+update afterwards behind a message that named the state and not the cause.
+
+- Set the guard **in the clone or the config, not only in the shell** that
+  runs your own scripts — the same person also runs the tool by hand and from
+  a desktop client, and a variable set in one script reaches none of that.
+- Prefer **a fast named failure over a wait**: an unattended run that stops
+  and says "could not sign in" is a sentence in a file; the same run waiting
+  on a prompt is a lost night with no diagnosis.
+- **Recovery must FINISH the succeeded case, not undo it.** A merge stopped at
+  the message has already merged every file and conflicted on none — aborting
+  it throws away good work and re-runs the same prompt next time. Ask whether
+  there are unmerged paths; that is the question that separates the two.
+- **A lint that greps every script for the guard is the cheap half.** The
+  sweep is what found 22 of 22; a rule that relies on remembering decays.
 
 ## 9. Do not block yourself
 
@@ -249,6 +321,65 @@ rule, and this file is mostly a list of rules that decayed.
   best available result, or the first working one? The next rung either gets
   taken now or goes onto the ladder with a name. An aspect whose next rung
   is blank is a research task, not a finished aspect.
+
+### MEASURE THE STUDIO'S OWN OVERHEAD, or it eats the project
+
+This framework is an instrument pointed at a project. Nothing in it was
+pointed at ITSELF until an owner asked why a night had cost so much, and the
+answer had to be measured rather than recalled:
+
+> **110 agent spawns in one day. 39 were instrument-builders, 23 were the
+> director. 78 of 110 — 71% — were the project working on itself; 32 built
+> the game.**
+
+Every one of those spawns was defensible on its own. The proportion was not,
+and nobody could see the proportion, because the spawn log recorded WHICH
+AGENT and never WHICH KIND OF WORK. A studio framework is uniquely prone to
+this: it makes measuring, reviewing and auditing cheap and legible, so those
+grow, and building the thing stays as hard as it was.
+
+**The instrument is one column and a share, printed where nobody has to
+remember to look.** Split the agent roster into the ones that BUILD THE
+PRODUCT and the ones that measure, review or audit it, count the day's
+spawns each way, and print the share into the verify footer that rides into
+every commit message. `gameShareDay=32/110@<date>`.
+
+- **A literal set, not a naming rule.** No convention carries this: an agent
+  called `instrument-builder` is a builder by name and overhead by purpose.
+  Names in neither list count as overhead — an unrecognised agent is not
+  evidence that the product got built.
+- **Print it, do not gate it, until there is a landed series.** A bound set
+  from one day is invented (rule 2). What the number is for at first is a
+  person seeing `0/22` on a day that felt productive.
+- **The same discipline as any other reading**: it is a COUNT over one UTC
+  day, the date is carried in the value so a quiet log cannot read as today,
+  and it ships its denominator.
+
+### THE PARK-AND-RESUME TEST
+
+**The benchmark this framework is built against: someone clones the repo cold
+and continues at full speed, losing nothing about HOW the work is done.** Not
+the code — the process. That is a testable claim and it is worth testing,
+because every mechanism here decays toward "the person who set it up
+remembers".
+
+Ask it as a question with a checkable answer. On any parked project:
+
+- **Does the first screen of `queue.md` say what to do FIRST, and why that
+  order?** Not the most interesting item — the one that makes the others
+  cheaper or possible. A prioritised list is not a starting point.
+- **Does it say what state the project is IN?** Parked, mid-flight, blocked,
+  waiting on a person. "Nothing is broken and nothing is running" is a fact
+  the next session cannot derive and will waste a turn establishing.
+- **Are the restart mechanisms named by ID, with the action spelled out?** A
+  disabled watchdog and a dead one look identical.
+- **Does `CLAUDE.md` still describe the machinery that exists?** It is the
+  file read every session, so a false sentence there is the most expensive
+  kind. When one is found, CORRECT IT IN PLACE AND QUOTE THE OLD WORDING —
+  a deleted error is one the next reader re-derives from scratch, and the
+  most convincing false sentences are the ones that were true when written.
+- **Is the tree clean and pushed?** An ephemeral environment holding
+  uncommitted work is a project that can stop silently.
 
 ---
 

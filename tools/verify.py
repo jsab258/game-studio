@@ -75,9 +75,78 @@ def builtin_checks():
         return ok, (f"queue: {len(items)} startable item(s), standing section "
                     f"{'present' if '## Standing' in body else 'MISSING'}")
 
+    def studio_overhead():
+        """What share of the day's agent spawns BUILT THE PRODUCT.
+
+        READING ONLY, NEVER RED. There is no landed series to set a bound
+        from, and a threshold invented here would be the move rule 2
+        forbids. What this is for is a person seeing the number at all: the
+        ancestor project ran 110 spawns in a day, 78 of them the project
+        working on itself, and nobody could see the proportion because the
+        log recorded WHICH AGENT and never WHICH KIND OF WORK.
+
+        THE SET IS LITERAL AND LIVES IN `.claude/agent-roles`, one name per
+        line, because no naming convention carries this: an agent called
+        `instrument-builder` is a builder by name and overhead by purpose.
+        A name in neither list counts as OVERHEAD — an unrecognised agent is
+        not evidence that the product got built, and defaulting the other
+        way would flatter every roster change.
+
+        It is a COUNT over the newest UTC day PRESENT IN THE LOG, with the
+        date carried in the value, so a log that went quiet yesterday cannot
+        read as today's spend. Every zero ships its denominator, and a
+        missing log prints the words rather than a clean-looking zero.
+        """
+        log = ROOT / ".claude" / "agent-log.tsv"
+        roles = ROOT / ".claude" / "agent-roles"
+        if not log.exists():
+            return True, "studio overhead: nothing-measured (no agent log)"
+        building = set()
+        if roles.exists():
+            building = {l.strip() for l in roles.read_text(encoding="utf-8").splitlines()
+                        if l.strip() and not l.startswith("#")}
+        by_day = {}
+        # TWO COUNTERS, AND THEY MUST BE ABLE TO DISAGREE. The first version
+        # of this incremented `rows` only AFTER the dateable test, so the
+        # message read "0 dateable row(s) of 0" — a denominator describing
+        # the set that survived the filter, which can never disagree with
+        # the numerator and therefore measures nothing. §3b, in code written
+        # for §3b, ten minutes after writing it. `offered` is every row the
+        # file holds; `dateable` is what the window could actually use.
+        offered = dateable = 0
+        for line in log.read_text(encoding="utf-8", errors="replace").splitlines()[1:]:
+            if not line.strip():
+                continue
+            offered += 1
+            parts = line.split("\t")
+            if len(parts) < 2 or "T" not in parts[0]:
+                continue
+            dateable += 1
+            day = parts[0].split("T")[0]
+            built, total = by_day.get(day, (0, 0))
+            by_day[day] = (built + (1 if parts[1].strip() in building else 0), total + 1)
+        if not by_day:
+            return True, (f"studio overhead: nothing-measured — 0 of {offered} "
+                          f"log row(s) carry a date, so no day window could be "
+                          f"built (the log is there and unreadable, which is not "
+                          f"the same fact as an empty log)")
+        day = max(by_day)
+        built, total = by_day[day]
+        if not building:
+            return True, (f"studio overhead: NOT MEASURED — {total} spawn(s) on "
+                          f"{day}, but .claude/agent-roles is missing, so no "
+                          f"agent can be counted as building the product")
+        skipped = offered - dateable
+        note = f", {skipped} undateable row(s) counted in no window" if skipped else ""
+        return True, (f"studio overhead: gameShareDay={built}/{total}@{day} — "
+                      f"COUNT of product-building spawns over all spawns on the "
+                      f"newest day in the log, of {offered} row(s) read{note}; "
+                      f"reading only, not gated")
+
     return [("hooks_selftest", hooks_selftest),
             ("docs_marked", docs_marked),
-            ("queue_startable", queue_startable)]
+            ("queue_startable", queue_startable),
+            ("studio_overhead", studio_overhead)]
 
 
 def plugin_checks():

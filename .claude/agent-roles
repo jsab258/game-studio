@@ -1,0 +1,14 @@
+# AGENTS THAT BUILD THE PRODUCT. Everything not listed here counts as
+# overhead — measuring, reviewing, auditing, directing — because an
+# unrecognised agent is not evidence that the product got built, and
+# defaulting the other way would flatter every roster change.
+#
+# A LITERAL SET, NOT A NAMING RULE, and that is the whole point: an agent
+# called `instrument-builder` is a builder by name and overhead by purpose.
+# It was 39 of one day's 110 spawns in the project this was extracted from.
+#
+# Read by tools/verify.py's `studio_overhead`, which prints gameShareDay
+# into the footer that rides into every commit message.
+systems-builder
+content-wrangler
+engine-specialist
