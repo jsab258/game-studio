@@ -43,6 +43,13 @@ turn. A memory of having checked is not a check. If you cannot check, say
   including ones you did not edit — and grep for the claim you have just
   falsified elsewhere. A comment is a claim with no test attached; it decays
   silently, and the decay is invisible in a diff that does not touch it.
+- **Quote the corpse when you retract a claim.** A correction that states
+  only the new truth leaves the old sentence re-derivable by the next reader,
+  who will find it exactly as plausible as everyone found it the first time.
+  So a retracted comment quotes its own false sentence verbatim before
+  correcting it — *"this said X; it was wrong because Y"* — and the same goes
+  for a doc row, a milestone status, or a reach-ledger reason. The
+  plausibility is the hazard, and deleting the words does not remove it.
 - **When you fix a bug, grep for the same bug.** One idea, two
   implementations, and the one nobody looks at is the one missing a line.
   The moment a fix works, grep for its distinguishing token and read every
@@ -133,6 +140,16 @@ produced locally, say so in the commit.
 - **A probe also needs a run in which the thing it asserts can happen.**
   The fix for a probe that only fires on lucky runs is to PLANT the
   condition, never to loosen the bound.
+- **An accepting fixture can ENSHRINE the bug**, which is this rule's
+  deepest form and the one that survives doing it properly. The extracted
+  project wrote a checker for "no value in a `key=value` line may contain a
+  space", gave it a selftest, and ran both halves — and its own good-input
+  fixture held a bracketed value with a space in it, asserted as REQUIRED
+  behaviour. Not an accepting case that went unrun: one that CERTIFIED the
+  fault, and made every future run defend it. A fixture is a claim too, so
+  read what the accepting case ASSERTS rather than only that it passes, and
+  derive it from the live artifact instead of from your memory of the
+  artifact.
 - **Keep a `--constant` sweep**: list every metric that has never been
   anything but zero across all kept runs. A reading cannot go red; only a
   person noticing "this number never moved" catches a dead branch.
@@ -292,6 +309,188 @@ The commit hook (`.claude/hooks/verify-gate.sh`) enforces the footer's
 freshness mechanically. It exists because "remember to run verify" is a
 rule, and this file is mostly a list of rules that decayed.
 
+**KNOWN LIMITATION, UNSOLVED — the commit gate assumes ONE writer.** The
+footer describes the WHOLE tree at the instant verify ran, and the hook
+blocks the commit if any tracked path is newer than the footer. With several
+builder agents editing in parallel, the tree is rarely stable long enough for
+a whole-tree footer to describe it, so the gate blocks on files that have
+nothing to do with the commit in hand. A whole-tree footer and concurrent
+writers are in tension by construction; this is named rather than hidden
+because a gate that fights concurrency silently gets disabled within a day,
+and then nothing is enforced at all. The two honest directions, if it bites:
+serialize the commit point (one reviewed commit per batch — see "The studio
+split" below), or narrow the freshness check to the paths being committed,
+which trades a class of false BLOCK for a class of false ALLOW. Do not
+simply remove the hook.
+
+---
+
+## The studio split — choose the variant
+
+**The selector question: is every turn paced by a human, or does the loop
+run autonomously?** Answer it here, by replacing the mark below with one of
+the two words. `tools/verify.py` FAILS until you do — undeclared is not a
+default, because the failure mode of skipping this question is a director
+that exists and is never called, and that failure is invisible from inside
+the session having it.
+
+    {{VARIANT: human-paced | autonomous}}
+
+Capability concentrates at the DIRECTION ROLE, not at the resident session.
+The two coincide only when a human paces the loop.
+
+**Human-paced variant.** The resident session IS the director, on the top
+model, and the tier-2/tier-3 roster ships unchanged. The trigger list below
+still names the moments that ARE direction moments — read it as guidance,
+because here the human is the enforcement and the escalation kit is not
+copied. `director_cadence` passes, printing that it is not enforcing.
+
+**Autonomous variant.** The resident is an **opus coordinator that decides
+nothing binding**: it routes, spawns, reads landings, and keeps the queue.
+The `studio-director` agent is spawned MANDATORILY on these triggers —
+
+1. builder-batch review before any commit of builder work
+2. queue reordering or refill
+3. a landing that changes a conclusion
+4. verifier-vs-builder disagreement
+5. close-outs (the quality-ladder question)
+6. anything touching the premise, the roadmap, or CLAUDE.md
+
+— and mandatorily means mechanically. A judgment-based "escalate when it
+matters" rule asks the cheaper model to know what it does not know, and the
+known failure mode of a coordinator is under-escalation. The extracted
+project's owner set the condition the whole arrangement is judged against
+(2026-08-24): *"we need to be 100% sure it works. no point in having a fable
+director if it's never called upon."*
+
+**What counts as ONE batch — because trigger 1 does not say, and the missing
+noun is expensive.** The extracted project ran exactly this trigger list for
+a night without ever defining the word *batch*, so each agent's output was
+treated as its own: **9 tier-1 spawns out of 36 agents in one night, about
+25%, on the model that counts double against the weekly limit.** The triggers
+were not wrong. The undefined noun was. The rules that closed it:
+
+- **A batch is all builder work landing in ONE reviewed commit**, accumulated
+  to a natural boundary and capped at one dispatch cycle. **Red fixes never
+  wait for a batch.**
+- **Every commit containing builder work still needs a director row**, so
+  splitting a batch cannot be used to dodge the review.
+- **Verifier first, director second.** Anything whose content is
+  claim-CHECKING goes to a tier-2 verifier, and the director is then spawned
+  with the verified position and spot-checks the verifier's citations. Tier 1
+  is for DECISIONS — premise, tier conflicts, scope, the quality-ladder call
+  — never for establishing facts a read-only verifier could establish more
+  cheaply. The review that produced this rule named itself as the
+  counter-example: most of what it had been handed was tier-2 work sent to
+  tier 1.
+- **One decision, one spawn.** Fold pending questions into the next mandatory
+  spawn rather than spawning per question.
+- **A killed spawn is RESUMED, never restarted.** A usage limit that kills a
+  director mid-ruling costs two spawns if you start over and one if you
+  resume — and the restart re-reads everything the first spawn already read,
+  which is the same arithmetic as the turn ceilings below.
+
+**The triggers bind regardless of the doorway** — a skill step that performs
+a trigger act (`/close`'s quality-ladder question, `/land`'s routing of a
+finding that changes a conclusion) is a director spawn in the autonomous
+variant, not an exemption from one.
+
+**The coordinator's charter is THIS SECTION — there is no coordinator agent
+file, and you should not create one.** The resident is the main session, not
+a subagent; a charter in an agent file would describe a role nothing spawns.
+
+Three mechanical enforcements, required in the autonomous variant:
+
+- **Every spawn is logged.** `.claude/hooks/agent-log.sh` (SubagentStart)
+  appends `when<TAB>agent<TAB>model` to a tracked `.claude/agent-log.tsv`.
+  Read it with
+  `sed 1d .claude/agent-log.tsv | cut -f2 | sort | uniq -c | sort -rn`.
+  Near-zero director rows over a working week, while commits flow, means
+  the triggers are not firing — that is the observable that reopens this
+  decision, not a feeling that review is thin.
+- **`director_cadence` blocks the commit** when more than **{{100}}**
+  changed lines under the code tree have no `studio-director` row newer
+  than **the last commit that TOUCHED CODE**
+  (`tools/verify.d/director_cadence.py`, run by `verify.py`).
+  **The reference is that commit and not HEAD, deliberately.** This used to
+  read "newer than HEAD", and it was wrong: any commit landing after a valid
+  review invalidated it, and the two commonest shapes carry no code at all —
+  a documentation edit, and CI committing its own evidence back into the
+  repository. In the extracted project that fired three times in one night,
+  each time forcing a fresh top-tier spawn to re-certify a batch already
+  reviewed. The review had not gone stale; the reference point was the wrong
+  instant. Where no code commit is reachable (a shallow CI checkout, a fresh
+  repo) it falls back to HEAD, which is stricter, and says which world it is
+  in.
+  **The enforced number lives in ONE place: `MAX_UNREVIEWED_LINES` in
+  that file.** The mark above only mirrors it for the reader — the check
+  never parses prose, so filling the mark alone changes nothing and the
+  gate goes on enforcing the constant. Set the constant, then the mark.
+- **The watchdog's dailies check force-spawns a director review** if none
+  has run in **{{12h}}**. This one cannot ship as portable code — trigger
+  systems differ per environment — so it is wiring you must add. The
+  precedent implementation is the extracted project's hourly watchdog
+  trigger, which re-invokes the loop and carries the current work order in
+  its own prompt.
+
+**KNOWN HOLE, UNSOLVED — the cadence gate is satisfied by a SPAWN, not by a
+completed review.** `director_cadence` reads the spawn log, and the spawn log
+is written when an agent STARTS. A director killed mid-ruling — by a usage
+limit, a crash, a cancelled turn — leaves behind a row that clears the gate.
+That is the gate certifying the exact thing it exists to prevent, and an
+unattended loop would commit unreviewed work on a green signal. It happened
+in the extracted project and is open there today; it is carried here as a
+finding rather than a fix, because a template claiming a fix it does not have
+is worse than one that names the hole.
+
+Two directions, neither implemented: log COMPLETION as well as start (a
+SubagentStop hook writing a second row, with the gate requiring the pair), or
+require a decision RECORD — `templates/decision.md` — newer than the
+reference commit, so the ARTIFACT of the review rather than the fact of the
+spawn is what clears the gate. The second is stricter and needs no new hook,
+but it gates on a file a director must remember to write, which is the class
+of rule this whole file exists to distrust. **Until one of them ships, the
+spawn log is an attendance register and not a review record. Read it as
+one.**
+
+**Both numbers are inherited from the extracted project and UNVALIDATED —
+print your own series before trusting them** (rule 2: never set a threshold
+you have not measured). `python3 tools/verify.d/director_cadence.py
+--series` prints the changed-line count of every recent commit, newest
+first, then the median and the peak, so the bound comes from your own
+distribution rather than from someone else's.
+
+### Turn ceilings are ceilings, not targets — and too LOW is the expensive one
+
+Every file in `.claude/agents/` carries a `maxTurns`. The intuition is that a
+low ceiling is the safe, thrifty default. It is the opposite, and the
+extracted project paid for the finding in a single night: **seven agents
+stalled one step from finishing, each one's last message a sentence
+announcing the work it was about to do.**
+
+A capped agent does not stop early and cheaply. It spends its full context
+FIRST, delivers nothing, and then needs a resume that reloads that context
+from scratch — **so a low cap turns one agent into two, and the second is the
+expensive half.** An agent that finishes at turn 22 under a ceiling of 45
+costs exactly what it would have cost under a ceiling of 25. An agent that
+needed 27 under a ceiling of 25 costs nearly double. The asymmetry runs one
+way, so the cheaper setting is the higher one.
+
+The ceilings shipped here — 35 for the read-only verifiers, 45 for the
+builders, 40 for the director and the artifact-reader — are the RAISED
+values, between 1.75x and 2.7x the first guesses they replaced. Two things
+about them:
+
+- **They are ceilings, not targets.** Nothing rewards an agent for
+  approaching one, and a brief should never cite the number as a budget to
+  spend.
+- **They are unvalidated UPWARD** (rule 2). The evidence says only that the
+  previous numbers were too low; no agent has yet been observed hitting
+  these, so they are a floor on the truth rather than a measurement of it.
+  The tell that one is biting is unmistakable and worth watching for: a
+  final message that DESCRIBES work rather than reporting it. When you see
+  it, raise the ceiling for that agent — do not re-brief it smaller.
+
 ---
 
 ## The working loop
@@ -314,6 +513,13 @@ rule, and this file is mostly a list of rules that decayed.
   only the second is what a watcher waits for.
 - **A turn ends only when nothing is startable.** Arming a watcher is the
   precondition for ending a turn, not permission to end one.
+- **The scratch directory is SHARED with every agent you spawn, so a fixed
+  filename is a collision.** In the extracted project one commit landed
+  carrying a different commit's message entirely, because two concurrent
+  workers each wrote the obvious `msg.txt`. Name scratch files uniquely (the
+  agent, plus a timestamp or the PID), and **read back anything you wrote
+  before a delay** — most of all a commit message, where the file you wrote
+  and the file you are about to use are two different claims (rule 1).
 - **Commit and push the moment a thing is green.** Ephemeral environments
   roll back; every rollback so far has cost nothing because of this habit
   and nothing else.

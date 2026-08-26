@@ -55,3 +55,6 @@ For each finding: a fix this session (queue top), a number to add
 then fix), or a question for the owner (rare — only if a decision is
 genuinely theirs). Update the queue BEFORE starting the next work item, so
 the landing's knowledge survives the session.
+
+Where a finding changes a conclusion, that is trigger 3 in the autonomous
+variant — the routing decision is the director's.

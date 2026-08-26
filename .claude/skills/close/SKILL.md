@@ -34,6 +34,9 @@ better asset already fetched, the 2K where 1K was wired, the map nothing
 samples). Take it now, or write it onto the ladder with a name. A blank
 next-rung is a research task, not a finished aspect.
 
+In the autonomous variant this question is the director's call (trigger 5) —
+spawn `studio-director`; human-paced, the resident holds the charter.
+
 ## 3. The move
 
 - The item's OPEN remainder (if any) stays in the queue, compressed to the

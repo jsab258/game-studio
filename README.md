@@ -26,7 +26,7 @@ heading.
 |---|---|---|
 | `CLAUDE.md` | The operating rules, as a template | The distilled epistemics: never assert unchecked, thresholds from printed series, every zero ships a denominator, suspect the instrument first, open the artifact, test guards on the case they should PASS, built-is-not-running |
 | `.claude/agents/` | A small tiered roster | Tier 1 decides (Fable), Tier 2 verifies adversarially (Opus), Tier 3 builds (Opus). Verifiers are mechanically read-only — an agent that cannot write code cannot "fix" what it was asked to judge |
-| `.claude/hooks/` | Hooks with teeth | The commit gate BLOCKS a commit unless the verify run is green and fresh — a rule that depends on the model remembering it is a rule that decays |
+| `.claude/hooks/` | Hooks with teeth | The commit gate BLOCKS a commit unless the verify run is green and fresh; the SubagentStart hook logs every spawn to a tracked `.claude/agent-log.tsv`, so "the director was called" is a number rather than a memory — a rule that depends on the model remembering it is a rule that decays |
 | `.claude/rules/` | Path-scoped standards | Loaded when editing matching files, so instrument discipline surfaces exactly where instruments are written |
 | `.claude/skills/` | Workflow skills | The working loop: queue discipline, batched CI dispatch with ancestry watchers, stills-before-gates review, close-with-the-ladder |
 | `tools/` | The verify skeleton | One command; green writes a footer file, red deletes it; commits paste the footer with `-F`. Pluggable checks per project |
@@ -36,7 +36,7 @@ heading.
 ## The tier model
 
 ```
-Tier 1 — Direction (model: fable)
+Tier 1 — Direction (model: fable — on-demand)
   studio-director        binding decisions, conflict resolution, premise-keeping
 
 Tier 2 — Verification (model: opus, read-only by construction)
@@ -54,13 +54,40 @@ Tier 3 — Execution (model: opus)
   content-wrangler       asset fetching, attribution, licence discipline, reach ledgers
 ```
 
-Why capability concentrates at the top and verification outranks execution:
-the expensive failure mode of an AI studio is not bad code, it is a
-**plausible unverified claim** — an agent reporting success that nothing
-checked. Builders produce claims; verifiers produce accusations; accusations
-are cheap to check. So the verifiers get a strong model and no write access,
-and the director gets the strongest model there is, because judgment is the
-scarcest resource in the loop.
+Each roster file carries a `maxTurns` ceiling. They are set HIGH on
+purpose, and the reason is counter-intuitive enough to be worth stating
+before you tune them down: a capped agent does not stop early and cheaply —
+it spends its full context, delivers nothing, and then needs a resume that
+reloads that context from scratch. **A low cap turns one agent into two.**
+The extracted project lost seven agents in one night to ceilings roughly
+half these, each stalling one step from finishing. Ceilings are not targets,
+and these are unvalidated upward: the evidence says the old numbers were too
+low, not that these are right.
+
+**Resident session.** In a *human-paced* loop the resident IS the director,
+on the top model. In an *autonomous* loop the resident is an opus
+coordinator and the director is spawned on mandatory triggers. Pick one at
+adoption — the selector question, the trigger list and the gate that blocks
+a commit until you answer it are in CLAUDE.md's
+["The studio split"](CLAUDE.md) section.
+
+Why capability concentrates at the DIRECTION ROLE and at verification, and
+why verification outranks execution: the expensive failure mode of an AI
+studio is not bad code, it is a **plausible unverified claim** — an agent
+reporting success that nothing checked. Builders produce claims; verifiers
+produce accusations; accusations are cheap to check. So the verifiers get a
+strong model and no write access, and the direction role gets the strongest
+model there is, because judgment is the scarcest resource in the loop.
+
+Whether that role lives in the *resident session* is a separate question,
+and it is answered by who paces the loop: the two coincide only when a human
+is in the loop. An autonomous resident wakes dozens of times a day on
+watchdogs and completions, re-reading its whole context each wake, so a
+top-model resident there buys routing at judgment prices — the role moves to
+an on-demand agent and the resident becomes a coordinator. Its escalation to
+the director is then MECHANICAL rather than discretionary, because the known
+failure mode of a cheaper resident is under-escalation, and a session that
+does not know what it does not know cannot be asked to notice.
 
 ## Quickstart
 
