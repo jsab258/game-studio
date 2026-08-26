@@ -179,10 +179,22 @@ def builtin_checks():
             built, total = by_day.get(day, (0, 0))
             by_day[day] = (built + (1 if parts[1].strip() in building else 0), total + 1)
         if not by_day:
-            return True, (f"studio overhead: nothing-measured — 0 of {offered} "
-                          f"log row(s) carry a date, so no day window could be "
-                          f"built (the log is there and unreadable, which is not "
-                          f"the same fact as an empty log)")
+            # THREE STATES, NOT TWO, and the first draft collapsed two of them
+            # into one sentence that was false for the commonest case: with a
+            # header-only log it said "the log is there and unreadable". An
+            # EMPTY log (nothing has run) and an UNREADABLE one (rows exist and
+            # none carries a date) need different next actions, so they cannot
+            # share wording — the same distinction as "no spawns" against
+            # "spawns nobody could date".
+            if offered == 0:
+                return True, ("studio overhead: nothing-measured — the agent "
+                              "log is EMPTY (0 rows after the header). No agent "
+                              "has been logged yet; this is the expected state "
+                              "for a fresh clone, not a fault")
+            return True, (f"studio overhead: NOT MEASURED — {offered} log row(s) "
+                          f"and NONE carries a date, so no day window could be "
+                          f"built. The log is being written in a shape this "
+                          f"cannot read, which is a fault and not an absence")
         day = max(by_day)
         built, total = by_day[day]
         if not building:
