@@ -1,5 +1,14 @@
 # Measured Studio
 
+> **STATUS: framework distilled from LEDGER production, current through
+> Phase R (2026-08-31).** This repo is FROZEN as legacy reference by decision
+> D10 in the LEDGER repo (ledger-v2/respec/decision-register/
+> D10-framework-freeze.md). The operative framework lives in that repo at
+> ledger-v2/studio-v2/. This repo is updated ONLY by harvest at LEDGER phase
+> exits: portable lessons are distilled in as clean rewrites, so it always
+> reads as a current framework rather than a changelog. Nothing here should
+> be edited outside a harvest commit.
+
 A Claude Code studio template for building games (and other long-running
 projects) **measurement-first**. Agents, hooks, rules, skills and document
 templates — extracted from a real project that ran autonomously for weeks,
